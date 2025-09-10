@@ -59,8 +59,56 @@ A Model Context Protocol (MCP) server that provides a powerful knowledge graph m
 
 ### Prerequisites
 - Python 3.8+
-- UV package manager (recommended)
-- Claude Desktop application
+- pip package manager
+- UV package manager (optional but recommended)
+- Claude Desktop application (optional)
+
+## Linux Installation
+
+### Option 1: Using UV (Recommended)
+
+```bash
+# Clone or download the repository
+git clone <repository-url> ~/knowledge-graph-mcp
+cd ~/knowledge-graph-mcp
+
+# Install UV if not already installed
+curl -LsSf https://astral.sh/uv/install.sh | sh
+
+# Create virtual environment with UV
+~/.local/bin/uv venv venv-kgmcp
+
+# Install dependencies with UV
+~/.local/bin/uv pip install --python venv-kgmcp/bin/python -r requirements.txt
+
+# Make the startup script executable
+chmod +x run_kg_server.sh
+
+# Run the server
+./run_kg_server.sh
+```
+
+### Option 2: Using pip
+
+```bash
+# Clone or download the repository
+git clone <repository-url> ~/knowledge-graph-mcp
+cd ~/knowledge-graph-mcp
+
+# Create virtual environment
+python3 -m venv venv-kgmcp
+
+# Activate virtual environment
+source venv-kgmcp/bin/activate
+
+# Install dependencies
+pip install -r requirements.txt
+
+# Run the server directly
+python knowledge_graph_mcp.py
+```
+
+## Windows Installation
 
 ### Step 1: Set up the Environment
 ```bash
@@ -75,19 +123,45 @@ uv venv venv-kgmcp
 venv-kgmcp\Scripts\activate
 
 # Install required dependencies
-uv pip install mcp fastmcp pydantic matplotlib networkx python-louvain
+uv pip install -r requirements.txt
 ```
 
-### Step 2: Install the MCP
+### Step 2: Run the MCP Server
 ```bash
-# Copy knowledge_graph_mcp.py to your project directory
-# Then install the Knowledge Graph MCP using the specific Python interpreter
-mcp install knowledge_graph_mcp.py -v UV_PYTHON=C:\user\KnowledgeGraph\venv-kgmcp\Scripts\python.exe
+# Run directly with Python
+venv-kgmcp\Scripts\python.exe knowledge_graph_mcp.py
 ```
 
-### Step 3: Configure Claude Desktop
+## Configure Claude Desktop (Optional)
 
-Add the following configuration to your Claude Desktop `claude_desktop_config.json` file:
+### Linux Configuration
+
+Add to your Claude Desktop `claude_desktop_config.json` file (usually in `~/.config/claude/`):
+
+```json
+{
+  "mcps": {
+    "Knowledge Graph": {
+      "command": "/home/YOUR_USERNAME/.local/bin/uv",
+      "args": [
+        "run",
+        "--with",
+        "mcp[cli]",
+        "mcp",
+        "run",
+        "/home/YOUR_USERNAME/knowledge-graph-mcp/knowledge_graph_mcp.py"
+      ],
+      "env": {
+        "UV_PYTHON": "/home/YOUR_USERNAME/knowledge-graph-mcp/venv-kgmcp/bin/python"
+      }
+    }
+  }
+}
+```
+
+### Windows Configuration
+
+Add to your Claude Desktop `claude_desktop_config.json` file:
 
 ```json
 {
@@ -110,36 +184,215 @@ Add the following configuration to your Claude Desktop `claude_desktop_config.js
 }
 ```
 
-### Step 4: Restart Claude Desktop
-After updating the configuration, restart Claude Desktop to load the new MCP server.
+### After Configuration
+Restart Claude Desktop to load the new MCP server.
+
+## Testing the Installation
+
+### Linux Testing
+
+```bash
+# Test the server with the included test script
+venv-kgmcp/bin/python test_kg.py
+
+# Or if you made the run script executable
+./run_kg_server.sh
+
+# You can also test individual functions
+venv-kgmcp/bin/python -c "from knowledge_graph_mcp import get_graph_file_path; print(f'Data location: {get_graph_file_path()}')"
+```
+
+### Windows Testing
+
+```bash
+# Test the server with the included test script
+venv-kgmcp\Scripts\python.exe test_kg.py
+
+# Test individual functions
+venv-kgmcp\Scripts\python.exe -c "from knowledge_graph_mcp import get_graph_file_path; print(f'Data location: {get_graph_file_path()}')"
+```
+
+### Expected Test Output
+
+When you run `test_kg.py`, you should see:
+```
+Testing Knowledge Graph MCP Server...
+Data will be stored at: /home/username/.knowledge_graph/graph.json
+--------------------------------------------------
+
+1. Creating test entities...
+   Result: success - Added 3 entities
+
+2. Creating relations...
+   Result: success - Added 2 relations
+
+3. Reading the entire graph...
+   Entities: 3
+   Relations: 2
+
+4. Testing search...
+   Found 2 matches for 'Python'
+
+5. Getting statistics...
+   Total entities: 3
+   Total relations: 2
+   Entity types: {'language': 1, 'library': 1, 'system': 1}
+
+==================================================
+All tests completed successfully!
+Graph data stored at: /home/username/.knowledge_graph/graph.json
+```
 
 ## Usage Examples
 
 ### Creating Your First Knowledge Graph
-```
-Create entities for a software project:
-- Entity: "Authentication Service", type: "service", observations: ["Handles user login", "Uses JWT tokens"]
-- Entity: "Database", type: "infrastructure", observations: ["PostgreSQL instance", "Stores user data"]
-- Entity: "API Gateway", type: "service", observations: ["Routes requests", "Rate limiting enabled"]
 
-Create relationships:
-- "Authentication Service" -> "Database" (relation: "depends_on")
-- "API Gateway" -> "Authentication Service" (relation: "routes_to")
-```
+#### Adding Entities
+```python
+# Using the test script or in your own Python code
+from knowledge_graph_mcp import *
 
-### Advanced Search
-```
-Find all entities of type "service" that have at least 2 observations and are connected to fewer than 5 other entities.
-```
-
-### Visualization
-```
-Generate a graph visualization to see the network structure and identify central nodes.
+# Create multiple entities
+entities_request = CreateEntitiesRequest(entities=[
+    Entity(name="Authentication Service", entityType="service", 
+           observations=["Handles user login", "Uses JWT tokens"]),
+    Entity(name="Database", entityType="infrastructure", 
+           observations=["PostgreSQL instance", "Stores user data"]),
+    Entity(name="API Gateway", entityType="service", 
+           observations=["Routes requests", "Rate limiting enabled"])
+])
+result = create_entities(entities_request)
 ```
 
-### Path Analysis
+#### Adding Relationships
+```python
+# Create relationships between entities
+relations_request = CreateRelationsRequest(relations=[
+    Relation(from_="Authentication Service", to="Database", relationType="depends_on"),
+    Relation(from_="API Gateway", to="Authentication Service", relationType="routes_to")
+])
+result = create_relations(relations_request)
 ```
-Find all paths between "User Interface" and "Database" to understand data flow.
+
+### Modifying Existing Data
+
+#### Adding Observations to Entities
+```python
+# Add new observations to an existing entity
+obs_request = AddObservationsRequest(
+    entityName="Database",
+    observations=["Backup daily at 2 AM", "Replicated across regions"]
+)
+result = add_observations(obs_request)
+```
+
+#### Merging Duplicate Entities
+```python
+# Merge two entities (useful for cleaning duplicates)
+merge_request = MergeEntitiesRequest(
+    sourceName="Auth Service",  # This entity will be removed
+    targetName="Authentication Service"  # All data moved here
+)
+result = merge_entities(merge_request)
+```
+
+### Deleting Data
+
+#### Delete Entities
+```python
+# Delete entities and their associated relationships
+delete_request = DeleteEntitiesRequest(
+    entityNames=["Old Service", "Deprecated API"]
+)
+result = delete_entities(delete_request)
+```
+
+#### Delete Specific Observations
+```python
+# Remove specific observations from an entity
+del_obs_request = DeleteObservationsRequest(
+    entityName="Database",
+    observations=["Outdated info", "Wrong observation"]
+)
+result = delete_observations(del_obs_request)
+```
+
+#### Delete Relationships
+```python
+# Remove specific relationships
+del_rel_request = DeleteRelationsRequest(relations=[
+    Relation(from_="API Gateway", to="Old Service", relationType="routes_to")
+])
+result = delete_relations(del_rel_request)
+```
+
+### Searching and Querying
+
+#### Basic Search
+```python
+# Search for entities by keyword
+search_request = SearchRequest(query="authentication")
+result = search_nodes(search_request)
+```
+
+#### Advanced Search with Filters
+```python
+# Find entities with specific criteria
+adv_search = AdvancedSearchRequest(
+    entityType="service",
+    minObservations=2,
+    maxRelations=5
+)
+result = advanced_search(adv_search)
+```
+
+#### Finding Paths Between Entities
+```python
+# Find connection paths between two entities
+paths = find_paths(
+    source="User Interface",
+    target="Database",
+    max_length=3
+)
+```
+
+### Visualization and Analysis
+```python
+# Generate a graph visualization
+visualization = get_graph_visualization()
+
+# Get comprehensive statistics
+stats = get_statistics()
+
+# Generate a detailed report with recommendations
+report = generate_report()
+
+# Detect clusters/communities in the graph
+clusters = detect_clusters()
+
+# Get AI-powered relationship suggestions
+suggestions = suggest_relations()
+```
+
+### Data Management
+
+#### Export Data
+```python
+# Export in different formats
+export_request = ExportGraphRequest(format="json")  # or "csv", "graphml"
+result = export_graph(export_request)
+```
+
+#### Backup and Restore
+```python
+# Create a backup
+backup_result = backup_graph()
+
+# Restore from backup (latest by default)
+restore_result = restore_graph()
+
+# Restore from specific backup file
+restore_result = restore_graph(backup_file="graph_backup_20240101_120000.json")
 ```
 
 ## Data Storage

@@ -1,0 +1,6 @@
+mcp>=1.13.1
+fastmcp>=2.12.2
+pydantic>=2.11.7
+matplotlib>=3.10.6
+networkx>=3.5
+python-louvain>=0.16

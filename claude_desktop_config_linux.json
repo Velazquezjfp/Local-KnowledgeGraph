@@ -1,0 +1,18 @@
+{
+  "mcps": {
+    "Knowledge Graph": {
+      "command": "/home/javiervel/.local/bin/uv",
+      "args": [
+        "run",
+        "--with",
+        "mcp[cli]",
+        "mcp",
+        "run",
+        "/home/javiervel/clients/personal/mcp-services/KG/linux-kg/Local-KnowledgeGraph/knowledge_graph_mcp.py"
+      ],
+      "env": {
+        "UV_PYTHON": "/home/javiervel/clients/personal/mcp-services/KG/linux-kg/Local-KnowledgeGraph/venv-kgmcp/bin/python"
+      }
+    }
+  }
+}
