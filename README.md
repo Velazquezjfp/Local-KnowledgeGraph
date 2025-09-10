@@ -187,6 +187,73 @@ Add to your Claude Desktop `claude_desktop_config.json` file:
 ### After Configuration
 Restart Claude Desktop to load the new MCP server.
 
+## Claude Code Installation
+
+### Installing MCP in Claude Code
+
+If you're using Claude Code (not Claude Desktop), you can install the MCP directly from the command line:
+
+#### Global Installation (Recommended)
+Make the MCP available across ALL your projects:
+
+```bash
+# Navigate to the Knowledge Graph MCP directory
+cd ~/knowledge-graph-mcp  # or wherever you cloned/downloaded it
+
+# Remove any existing installation (if needed)
+claude mcp remove knowledge-graph
+
+# Add the MCP with user scope (globally available)
+claude mcp add knowledge-graph --scope user venv-kgmcp/bin/python knowledge_graph_mcp.py
+
+# Verify the installation
+claude mcp list
+```
+
+You should see output like:
+```
+Checking MCP server health...
+knowledge-graph: venv-kgmcp/bin/python knowledge_graph_mcp.py - ✓ Connected
+```
+
+#### Project-Specific Installation
+If you only want the MCP for a specific project:
+
+```bash
+# In your project directory
+claude mcp add knowledge-graph --scope project /path/to/knowledge_graph_mcp.py
+```
+
+#### Local Installation (Current User Only)
+For personal use in the current project only:
+
+```bash
+# Default scope is local
+claude mcp add knowledge-graph /path/to/knowledge_graph_mcp.py
+```
+
+### Scope Options Explained
+
+- **`--scope user`**: Available in ALL your projects (stored in `~/.claude.json`)
+- **`--scope project`**: Shared with team via `.mcp.json` file in project
+- **`--scope local`**: Only for you in current project (default)
+
+### Managing Your MCP
+
+```bash
+# List all installed MCPs and their status
+claude mcp list
+
+# Get details about a specific MCP
+claude mcp get knowledge-graph
+
+# Remove an MCP
+claude mcp remove knowledge-graph
+
+# In Claude Code, check connected MCPs
+/mcp
+```
+
 ## Testing the Installation
 
 ### Linux Testing
