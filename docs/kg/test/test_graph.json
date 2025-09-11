@@ -1,0 +1,41 @@
+{
+  "entities": [
+    {
+      "name": "TestFunction",
+      "entityType": "function",
+      "observations": [
+        "Line 10-20",
+        "Returns string",
+        "Has 2 parameters"
+      ]
+    },
+    {
+      "name": "TestClass",
+      "entityType": "class",
+      "observations": [
+        "Line 50-100",
+        "Inherits from BaseClass"
+      ]
+    },
+    {
+      "name": "config.py",
+      "entityType": "module",
+      "observations": [
+        "Configuration module",
+        "Contains settings"
+      ]
+    }
+  ],
+  "relations": [
+    {
+      "from_": "TestClass",
+      "to": "TestFunction",
+      "relationType": "calls"
+    },
+    {
+      "from_": "config.py",
+      "to": "TestClass",
+      "relationType": "imports"
+    }
+  ]
+}

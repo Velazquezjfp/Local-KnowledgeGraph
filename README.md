@@ -2,6 +2,24 @@
 
 A Model Context Protocol (MCP) server that provides a powerful knowledge graph management system for Claude. This tool allows you to create, manage, and visualize complex networks of interconnected entities with observations and relationships.
 
+## Two Versions Available
+
+### 1. Standard Knowledge Graph MCP (`knowledge_graph_mcp.py`)
+The original MCP that stores graphs in `~/.knowledge_graph/` - perfect for personal knowledge management and persistent data storage.
+
+### 2. Custom Path Knowledge Graph MCP (`knowledge_graph_mcp_custom_path.py`) 
+**Optimized for Codebase Analysis and Project-Specific Graphs**
+
+This enhanced version allows you to save knowledge graphs to custom locations, making it ideal for:
+- **Code-Graph Generation**: Analyze codebases and create knowledge graphs representing functions, classes, modules, and their relationships
+- **Project-Specific Analysis**: Save graphs within project directories for version control and team collaboration
+- **Sub-Agent Integration**: Perfect for AI agents that need to build and save knowledge graphs in specific locations
+- **Multi-Project Management**: Each project can have its own knowledge graph without conflicts
+
+The custom path version includes two additional tools:
+- `set_graph_path(path)` - Set a custom save location (relative or absolute)
+- `get_current_graph_path()` - Check where the graph is currently being saved
+
 ## Features
 
 ### Core Knowledge Graph Operations
@@ -194,27 +212,49 @@ Restart Claude Desktop to load the new MCP server.
 If you're using Claude Code (not Claude Desktop), you can install the MCP directly from the command line:
 
 #### Global Installation (Recommended)
-Make the MCP available across ALL your projects:
+Make the MCPs available across ALL your projects:
 
 ```bash
 # Navigate to the Knowledge Graph MCP directory
 cd ~/knowledge-graph-mcp  # or wherever you cloned/downloaded it
 
+# Get the absolute path of the current directory
+pwd  # Note this path for the next step
+
+# INSTALL STANDARD MCP (saves to ~/.knowledge_graph/)
 # Remove any existing installation (if needed)
 claude mcp remove knowledge-graph
 
-# Add the MCP with user scope (globally available)
-claude mcp add knowledge-graph --scope user venv-kgmcp/bin/python knowledge_graph_mcp.py
+# Add the standard MCP with user scope using ABSOLUTE PATHS
+claude mcp add knowledge-graph --scope user -- /absolute/path/to/venv-kgmcp/bin/python /absolute/path/to/knowledge_graph_mcp.py
 
-# Verify the installation
+# INSTALL CUSTOM PATH MCP (for codebase analysis)
+# Remove any existing installation (if needed)
+claude mcp remove knowledge-graph-custom-path
+
+# Add the custom path MCP with user scope using ABSOLUTE PATHS
+claude mcp add knowledge-graph-custom-path --scope user -- /absolute/path/to/venv-kgmcp/bin/python /absolute/path/to/knowledge_graph_mcp_custom_path.py
+
+# Example with actual paths:
+# claude mcp add knowledge-graph --scope user -- /home/username/knowledge-graph-mcp/venv-kgmcp/bin/python /home/username/knowledge-graph-mcp/knowledge_graph_mcp.py
+# claude mcp add knowledge-graph-custom-path --scope user -- /home/username/knowledge-graph-mcp/venv-kgmcp/bin/python /home/username/knowledge-graph-mcp/knowledge_graph_mcp_custom_path.py
+
+# Verify both installations
 claude mcp list
 ```
 
 You should see output like:
 ```
 Checking MCP server health...
-knowledge-graph: venv-kgmcp/bin/python knowledge_graph_mcp.py - ✓ Connected
+knowledge-graph: /home/username/knowledge-graph-mcp/venv-kgmcp/bin/python /home/username/knowledge-graph-mcp/knowledge_graph_mcp.py - ✓ Connected
+knowledge-graph-custom-path: /home/username/knowledge-graph-mcp/venv-kgmcp/bin/python /home/username/knowledge-graph-mcp/knowledge_graph_mcp_custom_path.py - ✓ Connected
 ```
+
+**Note:** The MCP must show absolute paths in the output. If you see relative paths, it will only work from the installation directory.
+
+**Which MCP to Use:**
+- **`knowledge-graph`**: For personal knowledge management, persistent storage in `~/.knowledge_graph/`
+- **`knowledge-graph-custom-path`**: For codebase analysis, project-specific graphs, sub-agent integration
 
 #### Project-Specific Installation
 If you only want the MCP for a specific project:
@@ -311,6 +351,59 @@ Graph data stored at: /home/username/.knowledge_graph/graph.json
 ```
 
 ## Usage Examples
+
+### Codebase Analysis with Custom Path MCP
+
+The Custom Path MCP is specifically designed for analyzing codebases and creating code-graphs. Here's how to use it:
+
+#### Setting Up for Codebase Analysis
+```python
+from knowledge_graph_mcp_custom_path import *
+
+# Set the graph to save in your project directory
+set_graph_path("./docs/kg/codebase_graph.json")
+
+# Create entities for code components
+entities_request = CreateEntitiesRequest(entities=[
+    Entity(name="UserController", entityType="class", 
+           observations=["Line 10-150", "REST controller", "Handles /api/users/*"]),
+    Entity(name="getUserById", entityType="function", 
+           observations=["Line 45-60", "Returns User object", "Validates ID parameter"]),
+    Entity(name="UserService", entityType="class", 
+           observations=["Line 200-400", "Business logic layer", "Manages user operations"]),
+    Entity(name="UserRepository", entityType="class", 
+           observations=["Line 500-600", "Data access layer", "PostgreSQL queries"])
+])
+create_entities(entities_request)
+
+# Define code relationships
+relations_request = CreateRelationsRequest(relations=[
+    Relation(from_="UserController", to="getUserById", relationType="contains"),
+    Relation(from_="getUserById", to="UserService", relationType="calls"),
+    Relation(from_="UserService", to="UserRepository", relationType="uses"),
+    Relation(from_="UserController", to="UserService", relationType="imports")
+])
+create_relations(relations_request)
+```
+
+#### Sub-Agent Integration for Automated Code Analysis
+The Custom Path MCP is perfect for sub-agents that analyze codebases:
+
+1. **Main agent** invokes a sub-agent with specific instructions
+2. **Sub-agent** uses the Custom Path MCP to:
+   - Set a project-specific save location
+   - Parse the codebase (using AST tools)
+   - Create entities for functions, classes, modules
+   - Map relationships (calls, imports, inherits, implements)
+   - Save the graph in the project directory
+3. **Result**: A complete code-graph saved at `./docs/kg/codebase_graph.json`
+
+This enables:
+- **Dependency tracking**: Visualize how components depend on each other
+- **Impact analysis**: Find what code is affected by changes
+- **Architecture documentation**: Auto-generate architecture diagrams
+- **Code navigation**: Understand complex codebases quickly
+- **Refactoring support**: Identify tightly coupled components
 
 ### Creating Your First Knowledge Graph
 
@@ -500,6 +593,10 @@ C:\user\KnowledgeGraph\
 1. **MCP not appearing in Claude**: Ensure Claude Desktop is restarted after configuration
 2. **Visualization errors**: Check that matplotlib and networkx are installed in the virtual environment
 3. **Path issues**: Verify all paths in the configuration use double backslashes (`\\`) on Windows
+4. **MCP only works in installation directory**: This happens when using relative paths. Always use absolute paths when configuring the MCP globally:
+   - ❌ Wrong: `claude mcp add knowledge-graph --scope user venv-kgmcp/bin/python knowledge_graph_mcp.py`
+   - ✅ Correct: `claude mcp add knowledge-graph --scope user -- /home/username/path/to/venv-kgmcp/bin/python /home/username/path/to/knowledge_graph_mcp.py`
+   - Run `pwd` in your MCP directory to get the correct absolute path
 
 ### Validation
 Test your installation by asking Claude:
