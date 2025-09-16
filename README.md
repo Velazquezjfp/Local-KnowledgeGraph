@@ -35,8 +35,12 @@ The custom path version includes two additional tools:
 - **Merge Entities**: Combine duplicate entities while preserving all relationships
 - **Statistics**: Comprehensive analytics and reporting on your knowledge graph
 
-### Visualization & Analysis
-- **Graph Visualization**: Generate visual representations of your knowledge network
+### Interactive Visualization & Analysis
+- **Interactive HTML Visualization**: Auto-generated D3.js visualizations with zoom, pan, and drag capabilities
+- **Automatic Visualization**: Every saved knowledge graph automatically gets an interactive HTML companion file
+- **Manual Visualization**: Generate HTML visualizations on-demand using `generate_html_visualization()`
+- **Rich Tooltips**: Click and hover on nodes to see detailed entity information and observations
+- **Graph Controls**: Adjust node sizes, link distances, reset views, and center graphs
 - **Relationship Suggestions**: AI-powered suggestions for potential new connections
 - **Advanced Filtering**: Filter entities and relationships by multiple criteria
 - **Comprehensive Reports**: Detailed analysis with recommendations for graph improvement
@@ -66,7 +70,8 @@ The custom path version includes two additional tools:
 - `get_statistics` - Comprehensive graph statistics
 - `generate_report` - Detailed analysis with recommendations
 - `detect_clusters` - Community detection within the graph
-- `get_graph_visualization` - Generate visual graph representations
+- `get_graph_visualization` - Generate static matplotlib graph representations
+- `generate_html_visualization` - Create interactive HTML visualizations with D3.js
 
 ### Data Management
 - `export_graph` - Export in JSON, CSV, or GraphML formats
@@ -397,6 +402,7 @@ The Custom Path MCP is perfect for sub-agents that analyze codebases:
    - Map relationships (calls, imports, inherits, implements)
    - Save the graph in the project directory
 3. **Result**: A complete code-graph saved at `./docs/kg/codebase_graph.json`
+4. **🆕 Bonus**: Interactive HTML visualization automatically created at `./docs/kg/graph_visualization.html`
 
 This enables:
 - **Dependency tracking**: Visualize how components depend on each other
@@ -518,7 +524,12 @@ paths = find_paths(
 
 ### Visualization and Analysis
 ```python
-# Generate a graph visualization
+# 🆕 Generate interactive HTML visualization (RECOMMENDED)
+result = generate_html_visualization()
+print(f"Interactive HTML created at: {result['htmlPath']}")
+# Opens in browser: zoom, pan, drag nodes, hover for details!
+
+# Generate static matplotlib visualization
 visualization = get_graph_visualization()
 
 # Get comprehensive statistics
@@ -605,6 +616,144 @@ Show me the knowledge graph statistics
 ```
 
 If working correctly, you should see a response with entity and relationship counts.
+
+## Interactive HTML Visualization
+
+### 🎯 **Auto-Generated Visualizations**
+
+**Every knowledge graph automatically gets an interactive HTML visualization!**
+
+When you save any knowledge graph (using any entity or relation creation/modification tool), the system automatically creates:
+- **`your-graph.json`** - The knowledge graph data
+- **`graph_visualization.html`** - Interactive D3.js visualization
+
+### 📱 **Visualization Features**
+
+**Interactive Navigation:**
+- **Zoom**: Mouse wheel to zoom in/out (0.1x to 4x)
+- **Pan**: Click and drag on empty space to move around
+- **Drag Nodes**: Click and drag any node to reposition it
+- **Click to Center**: Click any node to smoothly center it on screen
+
+**Visual Elements:**
+- **Color-coded nodes** by entity type with automatic legend
+- **Directional arrows** showing relationship flow
+- **Node labels** displaying entity names
+- **Link labels** showing relationship types
+- **Dynamic tooltips** on hover with full entity details
+
+**Interactive Controls:**
+- **Node Size**: Switch between Small/Medium/Large nodes
+- **Link Distance**: Adjust Short/Medium/Long connection distances
+- **Reset View**: Return to original zoom/position
+- **Center Graph**: Auto-fit entire graph in view
+
+### 🚀 **Usage Examples**
+
+#### Automatic Visualization (Recommended)
+```python
+# Just use the MCP normally - HTML is auto-generated!
+from knowledge_graph_mcp_custom_path import *
+
+# Set your project path
+set_graph_path("./docs/knowledge-graph.json")
+
+# Create entities and relations as usual
+entities = CreateEntitiesRequest(entities=[
+    Entity(name="UserService", entityType="service",
+           observations=["Handles authentication", "REST API endpoints"]),
+    Entity(name="Database", entityType="infrastructure",
+           observations=["PostgreSQL", "User data storage"])
+])
+create_entities(entities)
+
+# Relations are created
+relations = CreateRelationsRequest(relations=[
+    Relation(from_="UserService", to="Database", relationType="depends_on")
+])
+create_relations(relations)
+
+# 🎉 HTML visualization automatically created at ./docs/graph_visualization.html
+```
+
+#### Manual Visualization Generation
+```python
+# Generate HTML visualization on-demand
+result = generate_html_visualization()
+print(f"HTML created at: {result['htmlPath']}")
+# Open the HTML file in your browser to explore!
+```
+
+### 📂 **File Structure After Creating Graphs**
+
+```
+your-project/
+├── docs/
+│   ├── knowledge-graph.json          # Your graph data
+│   ├── graph_visualization.html      # 🆕 Interactive visualization
+│   └── backups/                      # Automatic backups
+├── src/
+└── README.md
+```
+
+### 🌐 **Opening Your Visualization**
+
+**Option 1: Direct Browser Opening**
+```bash
+# Linux/WSL
+xdg-open ./docs/graph_visualization.html
+
+# macOS
+open ./docs/graph_visualization.html
+
+# Windows
+start ./docs/graph_visualization.html
+```
+
+**Option 2: File Explorer**
+- Navigate to your graph directory
+- Double-click `graph_visualization.html`
+- Opens in your default browser
+
+### 🎨 **Visualization Customization**
+
+The HTML file includes:
+- **Responsive design** that works on desktop and mobile
+- **Professional styling** with clean, modern interface
+- **Statistics dashboard** showing entity/relation counts
+- **Graph path display** showing the source JSON file
+- **Auto-layout algorithm** that positions nodes optimally
+- **Performance optimized** for large graphs (hundreds of nodes)
+
+### 💡 **Perfect for Code Analysis**
+
+When used with code analysis sub-agents, you get:
+
+1. **High-level Architecture** (`code-graph.json` → `graph_visualization.html`)
+   - Visualize modules, services, and their relationships
+   - Understand system architecture at a glance
+   - Perfect for documentation and onboarding
+
+2. **Detailed Implementation** (`clean_analysis.json` → `graph_visualization.html`)
+   - Explore every function, class, and configuration
+   - Navigate through detailed code relationships
+   - Ideal for debugging and refactoring
+
+### 🔧 **Technical Details**
+
+- **Technology**: D3.js v7 with force-directed layout
+- **Dependencies**: None (completely self-contained HTML file)
+- **File Size**: Typically 50-200KB depending on graph size
+- **Browser Support**: All modern browsers (Chrome, Firefox, Safari, Edge)
+- **Performance**: Handles graphs with 100+ entities smoothly
+
+### 🚫 **Disabling Auto-Visualization**
+
+If you need to disable automatic HTML generation:
+```python
+# Save without auto-generating HTML
+save_graph(your_graph, auto_generate_html=False)
+```
 
 ## Contributing
 

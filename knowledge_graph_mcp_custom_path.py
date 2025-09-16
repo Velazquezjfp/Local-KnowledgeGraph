@@ -129,7 +129,7 @@ def read_graph_file() -> KnowledgeGraph:
         except (json.JSONDecodeError, ValueError):
             return KnowledgeGraph()
 
-def save_graph(graph: KnowledgeGraph):
+def save_graph(graph: KnowledgeGraph, auto_generate_html: bool = True):
     file_path = get_graph_file_path()
     # Create a backup before saving
     if file_path.exists():
@@ -138,17 +138,25 @@ def save_graph(graph: KnowledgeGraph):
         backup_dir.mkdir(exist_ok=True)
         backup_path = backup_dir / f"graph_{timestamp}.json.bak"
         shutil.copy(file_path, backup_path)
-        
+
         # Keep only the last 10 backups
         backup_files = sorted(list(backup_dir.glob("*.bak")))
         if len(backup_files) > 10:
             for old_file in backup_files[:-10]:
                 old_file.unlink()
-    
+
     # Save the graph without the index
     graph_dict = graph.model_dump(exclude={'_name_index'})
     with open(file_path, "w") as f:
         json.dump(graph_dict, indent=2, fp=f)
+
+    # Auto-generate HTML visualization if graph has entities and relations
+    if auto_generate_html and graph.entities and len(graph.entities) > 0:
+        try:
+            _generate_html_visualization_internal(graph, file_path)
+        except Exception as e:
+            # Don't fail the save operation if visualization fails
+            print(f"Warning: Could not auto-generate visualization: {e}")
 
 def find_entity_by_name(graph: KnowledgeGraph, name: str) -> Optional[Entity]:
     """Helper function to find an entity by name (case-insensitive)"""
@@ -158,6 +166,559 @@ def find_entity_by_name(graph: KnowledgeGraph, name: str) -> Optional[Entity]:
     
     # Fallback if index is not available
     return next((e for e in graph.entities if e.name.lower() == name), None)
+
+def _generate_html_visualization_internal(graph: KnowledgeGraph, graph_file_path: Path):
+    """Internal function to generate HTML visualization"""
+    html_file_path = graph_file_path.parent / "graph_visualization.html"
+
+    # Prepare data for D3.js
+    nodes = []
+    for i, entity in enumerate(graph.entities):
+        nodes.append({
+            "id": entity.name,
+            "type": entity.entityType,
+            "observations": entity.observations,
+            "index": i
+        })
+
+    links = []
+    for relation in graph.relations:
+        links.append({
+            "source": relation.from_,
+            "target": relation.to,
+            "type": relation.relationType
+        })
+
+    # Count entity types for color mapping
+    entity_types = list(set(entity.entityType for entity in graph.entities))
+
+    # Create the HTML content (reusing the same template from the main function)
+    html_content = f'''<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Knowledge Graph Visualization - {graph_file_path.stem}</title>
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <style>
+        body {{
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }}
+
+        .container {{
+            max-width: 100%;
+            margin: 0 auto;
+        }}
+
+        .header {{
+            text-align: center;
+            margin-bottom: 20px;
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }}
+
+        .graph-path {{
+            font-size: 12px;
+            color: #666;
+            margin-top: 8px;
+            font-family: monospace;
+            background: #f8f9fa;
+            padding: 4px 8px;
+            border-radius: 4px;
+            display: inline-block;
+        }}
+
+        .stats {{
+            display: flex;
+            justify-content: center;
+            gap: 30px;
+            margin-top: 10px;
+        }}
+
+        .stat {{
+            text-align: center;
+        }}
+
+        .stat-number {{
+            font-size: 24px;
+            font-weight: bold;
+            color: #333;
+        }}
+
+        .stat-label {{
+            font-size: 14px;
+            color: #666;
+        }}
+
+        .graph-container {{
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            position: relative;
+            overflow: hidden;
+        }}
+
+        .controls {{
+            padding: 15px;
+            border-bottom: 1px solid #eee;
+            display: flex;
+            gap: 15px;
+            align-items: center;
+            flex-wrap: wrap;
+        }}
+
+        .control-group {{
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }}
+
+        .control-group label {{
+            font-size: 14px;
+            font-weight: 500;
+        }}
+
+        .control-group select, .control-group button {{
+            padding: 5px 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 14px;
+        }}
+
+        .control-group button {{
+            background: #007bff;
+            color: white;
+            cursor: pointer;
+            border: none;
+        }}
+
+        .control-group button:hover {{
+            background: #0056b3;
+        }}
+
+        #graph {{
+            width: 100%;
+            height: 600px;
+            border: 1px solid #ddd;
+        }}
+
+        .node {{
+            cursor: pointer;
+            stroke: #fff;
+            stroke-width: 2px;
+        }}
+
+        .link {{
+            fill: none;
+            stroke: #999;
+            stroke-width: 1.5px;
+            marker-end: url(#arrowhead);
+        }}
+
+        .node-label {{
+            font-size: 12px;
+            font-weight: bold;
+            text-anchor: middle;
+            pointer-events: none;
+            fill: #333;
+        }}
+
+        .link-label {{
+            font-size: 10px;
+            text-anchor: middle;
+            pointer-events: none;
+            fill: #666;
+        }}
+
+        .tooltip {{
+            position: absolute;
+            background: rgba(0, 0, 0, 0.9);
+            color: white;
+            padding: 12px;
+            border-radius: 6px;
+            font-size: 14px;
+            pointer-events: none;
+            max-width: 300px;
+            z-index: 1000;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.3);
+        }}
+
+        .tooltip h3 {{
+            margin: 0 0 8px 0;
+            font-size: 16px;
+            color: #4fc3f7;
+        }}
+
+        .tooltip .type {{
+            color: #81c784;
+            font-weight: bold;
+            margin-bottom: 8px;
+        }}
+
+        .tooltip .observations {{
+            margin-top: 8px;
+        }}
+
+        .tooltip .observations h4 {{
+            margin: 0 0 4px 0;
+            font-size: 12px;
+            color: #ffb74d;
+        }}
+
+        .tooltip .observations ul {{
+            margin: 0;
+            padding-left: 16px;
+        }}
+
+        .tooltip .observations li {{
+            font-size: 12px;
+            margin-bottom: 2px;
+        }}
+
+        .legend {{
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            background: rgba(255, 255, 255, 0.95);
+            padding: 15px;
+            border-radius: 6px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+            max-width: 200px;
+        }}
+
+        .legend h4 {{
+            margin: 0 0 10px 0;
+            font-size: 14px;
+            color: #333;
+        }}
+
+        .legend-item {{
+            display: flex;
+            align-items: center;
+            margin-bottom: 6px;
+            font-size: 12px;
+        }}
+
+        .legend-color {{
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+            margin-right: 8px;
+            border: 1px solid #ccc;
+        }}
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>Knowledge Graph: {graph_file_path.stem}</h1>
+            <div class="graph-path">{str(graph_file_path)}</div>
+            <div class="stats">
+                <div class="stat">
+                    <div class="stat-number">{len(graph.entities)}</div>
+                    <div class="stat-label">Entities</div>
+                </div>
+                <div class="stat">
+                    <div class="stat-number">{len(graph.relations)}</div>
+                    <div class="stat-label">Relations</div>
+                </div>
+                <div class="stat">
+                    <div class="stat-number">{len(entity_types)}</div>
+                    <div class="stat-label">Types</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="graph-container">
+            <div class="controls">
+                <div class="control-group">
+                    <label for="nodeSize">Node Size:</label>
+                    <select id="nodeSize">
+                        <option value="small">Small</option>
+                        <option value="medium" selected>Medium</option>
+                        <option value="large">Large</option>
+                    </select>
+                </div>
+                <div class="control-group">
+                    <label for="linkDistance">Link Distance:</label>
+                    <select id="linkDistance">
+                        <option value="short">Short</option>
+                        <option value="medium" selected>Medium</option>
+                        <option value="long">Long</option>
+                    </select>
+                </div>
+                <div class="control-group">
+                    <button onclick="resetZoom()">Reset View</button>
+                </div>
+                <div class="control-group">
+                    <button onclick="centerGraph()">Center Graph</button>
+                </div>
+            </div>
+            <svg id="graph"></svg>
+            <div class="legend" id="legend"></div>
+        </div>
+    </div>
+
+    <div class="tooltip" id="tooltip" style="display: none;"></div>
+
+    <script>
+        // Data
+        const nodes = {json.dumps(nodes, indent=8)};
+        const links = {json.dumps(links, indent=8)};
+
+        // Set up dimensions and margins
+        const margin = {{top: 20, right: 20, bottom: 20, left: 20}};
+        const width = 1200;
+        const height = 600;
+
+        // Create SVG
+        const svg = d3.select("#graph")
+            .attr("width", width)
+            .attr("height", height);
+
+        // Create groups for zoomable content
+        const container = svg.append("g");
+
+        // Define zoom behavior
+        const zoom = d3.zoom()
+            .scaleExtent([0.1, 4])
+            .on("zoom", function(event) {{
+                container.attr("transform", event.transform);
+            }});
+
+        svg.call(zoom);
+
+        // Color scale for node types
+        const entityTypes = [...new Set(nodes.map(d => d.type))];
+        const colorScale = d3.scaleOrdinal()
+            .domain(entityTypes)
+            .range(d3.schemeCategory10);
+
+        // Create legend
+        function createLegend() {{
+            const legend = d3.select("#legend");
+            legend.append("h4").text("Entity Types");
+
+            const items = legend.selectAll(".legend-item")
+                .data(entityTypes)
+                .enter()
+                .append("div")
+                .attr("class", "legend-item");
+
+            items.append("div")
+                .attr("class", "legend-color")
+                .style("background-color", d => colorScale(d));
+
+            items.append("span")
+                .text(d => d);
+        }}
+
+        // Define arrow marker
+        svg.append("defs").append("marker")
+            .attr("id", "arrowhead")
+            .attr("viewBox", "-0 -5 10 10")
+            .attr("refX", 20)
+            .attr("refY", 0)
+            .attr("orient", "auto")
+            .attr("markerWidth", 8)
+            .attr("markerHeight", 8)
+            .attr("xoverflow", "visible")
+            .append("svg:path")
+            .attr("d", "M 0,-5 L 10 ,0 L 0,5")
+            .attr("fill", "#999")
+            .style("stroke", "none");
+
+        // Create force simulation
+        let simulation = d3.forceSimulation(nodes)
+            .force("link", d3.forceLink(links).id(d => d.id).distance(100))
+            .force("charge", d3.forceManyBody().strength(-400))
+            .force("center", d3.forceCenter(width / 2, height / 2))
+            .force("collision", d3.forceCollide().radius(25));
+
+        // Create links
+        const link = container.append("g")
+            .selectAll("line")
+            .data(links)
+            .enter().append("line")
+            .attr("class", "link");
+
+        // Create link labels
+        const linkLabel = container.append("g")
+            .selectAll("text")
+            .data(links)
+            .enter().append("text")
+            .attr("class", "link-label")
+            .text(d => d.type);
+
+        // Create nodes
+        const node = container.append("g")
+            .selectAll("circle")
+            .data(nodes)
+            .enter().append("circle")
+            .attr("class", "node")
+            .attr("r", 12)
+            .attr("fill", d => colorScale(d.type))
+            .call(d3.drag()
+                .on("start", dragstarted)
+                .on("drag", dragged)
+                .on("end", dragended));
+
+        // Create node labels
+        const nodeLabel = container.append("g")
+            .selectAll("text")
+            .data(nodes)
+            .enter().append("text")
+            .attr("class", "node-label")
+            .attr("dy", -15)
+            .text(d => d.id);
+
+        // Tooltip
+        const tooltip = d3.select("#tooltip");
+
+        // Node interactions
+        node
+            .on("mouseover", function(event, d) {{
+                // Highlight node
+                d3.select(this).attr("stroke", "#333").attr("stroke-width", 3);
+
+                // Show tooltip
+                let tooltipContent = `<h3>${{d.id}}</h3>`;
+                tooltipContent += `<div class="type">Type: ${{d.type}}</div>`;
+
+                if (d.observations && d.observations.length > 0) {{
+                    tooltipContent += '<div class="observations"><h4>Observations:</h4><ul>';
+                    d.observations.forEach(obs => {{
+                        tooltipContent += `<li>${{obs}}</li>`;
+                    }});
+                    tooltipContent += '</ul></div>';
+                }}
+
+                tooltip.html(tooltipContent)
+                    .style("display", "block")
+                    .style("left", (event.pageX + 10) + "px")
+                    .style("top", (event.pageY + 10) + "px");
+            }})
+            .on("mousemove", function(event) {{
+                tooltip.style("left", (event.pageX + 10) + "px")
+                    .style("top", (event.pageY + 10) + "px");
+            }})
+            .on("mouseout", function() {{
+                // Remove highlight
+                d3.select(this).attr("stroke", "#fff").attr("stroke-width", 2);
+
+                // Hide tooltip
+                tooltip.style("display", "none");
+            }})
+            .on("click", function(event, d) {{
+                // Center on clicked node
+                const transform = d3.zoomTransform(svg.node());
+                const x = -d.x * transform.k + width / 2;
+                const y = -d.y * transform.k + height / 2;
+
+                svg.transition().duration(500).call(
+                    zoom.transform,
+                    d3.zoomIdentity.translate(x, y).scale(transform.k)
+                );
+            }});
+
+        // Simulation tick
+        simulation.on("tick", () => {{
+            link
+                .attr("x1", d => d.source.x)
+                .attr("y1", d => d.source.y)
+                .attr("x2", d => d.target.x)
+                .attr("y2", d => d.target.y);
+
+            linkLabel
+                .attr("x", d => (d.source.x + d.target.x) / 2)
+                .attr("y", d => (d.source.y + d.target.y) / 2);
+
+            node
+                .attr("cx", d => d.x)
+                .attr("cy", d => d.y);
+
+            nodeLabel
+                .attr("x", d => d.x)
+                .attr("y", d => d.y);
+        }});
+
+        // Drag functions
+        function dragstarted(event) {{
+            if (!event.active) simulation.alphaTarget(0.3).restart();
+            event.subject.fx = event.subject.x;
+            event.subject.fy = event.subject.y;
+        }}
+
+        function dragged(event) {{
+            event.subject.fx = event.x;
+            event.subject.fy = event.y;
+        }}
+
+        function dragended(event) {{
+            if (!event.active) simulation.alphaTarget(0);
+            event.subject.fx = null;
+            event.subject.fy = null;
+        }}
+
+        // Control functions
+        function resetZoom() {{
+            svg.transition().duration(500).call(
+                zoom.transform,
+                d3.zoomIdentity
+            );
+        }}
+
+        function centerGraph() {{
+            const bounds = container.node().getBBox();
+            const fullWidth = width;
+            const fullHeight = height;
+            const widthScale = fullWidth / bounds.width;
+            const heightScale = fullHeight / bounds.height;
+            const scale = Math.min(widthScale, heightScale) * 0.8;
+            const translate = [fullWidth / 2 - scale * bounds.x - scale * bounds.width / 2,
+                             fullHeight / 2 - scale * bounds.y - scale * bounds.height / 2];
+
+            svg.transition().duration(500).call(
+                zoom.transform,
+                d3.zoomIdentity.translate(translate[0], translate[1]).scale(scale)
+            );
+        }}
+
+        // Control event listeners
+        d3.select("#nodeSize").on("change", function() {{
+            const size = this.value;
+            const radius = size === "small" ? 8 : size === "large" ? 16 : 12;
+            node.attr("r", radius);
+            simulation.force("collision").radius(radius + 5);
+            simulation.restart();
+        }});
+
+        d3.select("#linkDistance").on("change", function() {{
+            const distance = this.value;
+            const dist = distance === "short" ? 50 : distance === "long" ? 150 : 100;
+            simulation.force("link").distance(dist);
+            simulation.restart();
+        }});
+
+        // Initialize
+        createLegend();
+
+        // Auto-center after initial layout
+        setTimeout(() => {{
+            centerGraph();
+        }}, 1000);
+    </script>
+</body>
+</html>'''
+
+    # Write the HTML file
+    with open(html_file_path, 'w', encoding='utf-8') as f:
+        f.write(html_content)
 
 # MCP tools
 
@@ -1260,16 +1821,16 @@ def backup_graph() -> Dict[str, Any]:
 def restore_graph(backup_file: str = None) -> Dict[str, Any]:
     """
     Restore the knowledge graph from a backup.
-    
+
     If no backup file is specified, restores from the most recent backup.
     """
     try:
         home_dir = Path.home()
         backup_dir = home_dir / ".knowledge_graph" / "backups"
-        
+
         if not backup_dir.exists() or not list(backup_dir.glob("*.json")):
             return {"status": "error", "message": "No backups found"}
-        
+
         # Find the backup to restore
         if backup_file:
             backup_path = backup_dir / backup_file
@@ -1281,24 +1842,24 @@ def restore_graph(backup_file: str = None) -> Dict[str, Any]:
             if not backups:
                 return {"status": "error", "message": "No backups found"}
             backup_path = backups[-1]
-        
+
         # Read the backup
         with open(backup_path, "r") as f:
             backup_data = json.load(f)
-        
+
         # Parse and validate
         backup_graph = KnowledgeGraph.parse_obj(backup_data)
-        
+
         # Back up the current graph before replacing
         current_graph = read_graph_file()
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         current_backup_path = backup_dir / f"pre_restore_{timestamp}.json"
         with open(current_backup_path, "w") as f:
             f.write(current_graph.json(indent=2, exclude={'_name_index'}))
-        
+
         # Save the restored graph
         save_graph(backup_graph)
-        
+
         return {
             "status": "success",
             "message": f"Graph restored from backup: {backup_path.name}",
@@ -1309,6 +1870,45 @@ def restore_graph(backup_file: str = None) -> Dict[str, Any]:
         }
     except Exception as e:
         return {"status": "error", "message": str(e)}
+
+@mcp.tool()
+def generate_html_visualization() -> Dict[str, Any]:
+    """
+    Generate an interactive HTML visualization of the knowledge graph.
+
+    Creates a self-contained HTML file with D3.js for interactive graph exploration.
+    Features include zoom, pan, drag nodes, click to view details, and smooth navigation.
+    """
+    try:
+        graph = read_graph_file()
+
+        if not graph.entities:
+            return {
+                "status": "info",
+                "message": "The knowledge graph is empty. Add some entities and relations first."
+            }
+
+        # Get the graph file path to determine where to save the HTML
+        graph_file_path = get_graph_file_path()
+
+        # Use the internal function to generate the HTML
+        _generate_html_visualization_internal(graph, graph_file_path)
+
+        html_file_path = graph_file_path.parent / "graph_visualization.html"
+        entity_types = list(set(entity.entityType for entity in graph.entities))
+
+        return {
+            "status": "success",
+            "message": f"Interactive HTML visualization created successfully",
+            "htmlPath": str(html_file_path),
+            "entityCount": len(graph.entities),
+            "relationCount": len(graph.relations),
+            "entityTypes": len(entity_types),
+            "openCommand": f"Open {html_file_path} in your web browser to view the interactive visualization"
+        }
+
+    except Exception as e:
+        return {"status": "error", "message": f"Failed to generate HTML visualization: {str(e)}"}
 
 if __name__ == "__main__":
     mcp.run()
